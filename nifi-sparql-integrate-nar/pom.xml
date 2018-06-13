@@ -17,12 +17,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>InfAI</groupId>
-        <artifactId>test</artifactId>
+        <groupId>org.aksw.sparql-integrate</groupId>
+        <artifactId>nifi-sparql-integrate-bundle</artifactId>
         <version>1.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>nifi-test-nar</artifactId>
+    <artifactId>nifi-sparql-integrate-nar</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>nar</packaging>
     <properties>
@@ -32,8 +32,8 @@
 
     <dependencies>
         <dependency>
-            <groupId>InfAI</groupId>
-            <artifactId>nifi-test-processors</artifactId>
+            <groupId>org.aksw.sparql-integrate</groupId>
+            <artifactId>nifi-sparql-integrate-processors</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
     </dependencies>
