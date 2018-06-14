@@ -1,3 +1,6 @@
+.idea
+*.iml
+
 ### Maven ###
 target/
 pom.xml.tag

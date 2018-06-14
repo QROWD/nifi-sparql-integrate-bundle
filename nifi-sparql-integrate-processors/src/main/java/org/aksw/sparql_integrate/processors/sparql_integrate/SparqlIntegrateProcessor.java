@@ -85,10 +85,10 @@ import com.google.common.io.CharStreams;
 @SeeAlso({})
 @ReadsAttributes({ @ReadsAttribute(attribute = "", description = "") })
 @WritesAttributes({ @WritesAttribute(attribute = "", description = "") })
-public class MyProcessor extends AbstractProcessor {
+public class SparqlIntegrateProcessor extends AbstractProcessor {
 
     public static final PropertyDescriptor SPARQL_QUERY = new PropertyDescriptor.Builder().name("SPARQL_QUERY")
-            .displayName("test").description("Example Property").required(true)
+            .displayName("tet").description("Example Property").required(true)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR).build();
 
     public static final Relationship SUCCESS = new Relationship.Builder().name("SUCCESS")

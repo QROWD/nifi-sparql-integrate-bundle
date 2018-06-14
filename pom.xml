@@ -32,4 +32,14 @@
         <module>nifi-sparql-integrate-nar</module>
     </modules>
 
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.apache.nifi</groupId>
+                <artifactId>nifi-nifi-example-processors</artifactId>
+                <version>1.6.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
 </project>
