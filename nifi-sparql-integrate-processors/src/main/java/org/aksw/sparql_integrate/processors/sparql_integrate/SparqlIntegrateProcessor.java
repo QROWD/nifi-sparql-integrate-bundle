@@ -80,15 +80,15 @@ import java.util.stream.Stream;
 import com.google.common.collect.Streams;
 import com.google.common.io.CharStreams;
 
-@Tags({ "example" })
-@CapabilityDescription("Provide a description")
+@Tags({ "RDF", "SPARQL" })
+@CapabilityDescription("This processor takes an SPARQL query as an argument and outputs a RDF-Turtle file.")
 @SeeAlso({})
 @ReadsAttributes({ @ReadsAttribute(attribute = "", description = "") })
 @WritesAttributes({ @WritesAttribute(attribute = "", description = "") })
 public class SparqlIntegrateProcessor extends AbstractProcessor {
 
     public static final PropertyDescriptor SPARQL_QUERY = new PropertyDescriptor.Builder().name("SPARQL_QUERY")
-            .displayName("tet").description("Example Property").required(true)
+            .displayName("sparql query").description("The query to run.").required(true)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR).build();
 
     public static final Relationship SUCCESS = new Relationship.Builder().name("SUCCESS")
