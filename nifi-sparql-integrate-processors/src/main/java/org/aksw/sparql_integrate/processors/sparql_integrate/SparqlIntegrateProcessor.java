@@ -25,6 +25,7 @@ import org.aksw.jena_sparql_api.stmt.SparqlStmt;
 import org.aksw.jena_sparql_api.stmt.SparqlStmtIterator;
 import org.aksw.jena_sparql_api.stmt.SparqlStmtParserImpl;
 import org.aksw.jena_sparql_api.stmt.SparqlStmtQuery;
+import org.apache.commons.compress.utils.IOUtils;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
@@ -44,6 +45,8 @@ import org.apache.jena.sparql.core.Prologue;
 import org.apache.jena.sparql.core.Quad;
 import org.apache.jena.sparql.lang.arq.ParseException;
 import org.apache.jena.update.UpdateRequest;
+import org.apache.nifi.annotation.behavior.InputRequirement;
+import org.apache.nifi.annotation.behavior.InputRequirement.Requirement;
 import org.apache.nifi.annotation.behavior.ReadsAttribute;
 import org.apache.nifi.annotation.behavior.ReadsAttributes;
 import org.apache.nifi.annotation.behavior.WritesAttribute;
@@ -53,6 +56,7 @@ import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.SeeAlso;
 import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.processor.exception.ProcessException;
+import org.apache.nifi.processor.io.InputStreamCallback;
 import org.apache.nifi.processor.io.OutputStreamCallback;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.ProcessContext;
@@ -85,6 +89,7 @@ import com.google.common.io.CharStreams;
 @SeeAlso({})
 @ReadsAttributes({ @ReadsAttribute(attribute = "", description = "") })
 @WritesAttributes({ @WritesAttribute(attribute = "", description = "") })
+@InputRequirement(Requirement.INPUT_REQUIRED)
 public class SparqlIntegrateProcessor extends AbstractProcessor {
 
     public static final PropertyDescriptor SPARQL_QUERY = new PropertyDescriptor.Builder().name("SPARQL_QUERY")
@@ -128,10 +133,10 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
     @Override
     public void onTrigger(final ProcessContext context, final ProcessSession session) throws ProcessException {
         final AtomicReference<Stream<SparqlStmt>> stmts = new AtomicReference<>();
-        FlowFile flowFile = session.create();
-        // if (flowFile == null) {
-        // return;
-        // }
+        FlowFile flowFile = session.get();
+        if (flowFile == null) {
+            return;
+        }
         PrefixMapping pm = new PrefixMappingImpl();
         pm.setNsPrefixes(PrefixMapping.Extended);
         JenaExtensionUtil.addPrefixes(pm);
@@ -142,14 +147,18 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
         prologue.setPrefixMapping(pm);
         prologue.setBaseURI("test");
         Function<String, SparqlStmt> sparqlStmtParser = SparqlStmtParserImpl.create(Syntax.syntaxARQ, prologue, true);
-        PropertyValue sparqlQuery = context.getProperty("SPARQL_QUERY");
 
-        InputStream in = new StringBufferInputStream(sparqlQuery.getValue());
-        try {
-            stmts.set(parseSparqlQueryFile(in, sparqlStmtParser));
-        } catch (Exception e) {
-        }
-
+        session.read(flowFile, new InputStreamCallback() {
+            @Override
+            public void process(InputStream in) throws IOException {
+                try {
+                    stmts.set(parseSparqlQueryFile(in, sparqlStmtParser));
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    getLogger().error("Failed to read sparql query.");
+                }
+            }
+        });
         // To write the results back out ot flow file
         flowFile = session.write(flowFile, new OutputStreamCallback() {
 
@@ -159,7 +168,7 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
                 stmts.get().forEach(stmt -> processStmts(conn, stmt, out));
             }
         });
-         session.transfer(flowFile, SUCCESS); 
+        session.transfer(flowFile, SUCCESS);
     }
 
     public static Stream<SparqlStmt> parseSparqlQueryFile(InputStream in, Function<String, SparqlStmt> parser)
