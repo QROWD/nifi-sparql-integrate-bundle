@@ -17,7 +17,6 @@
 package org.aksw.sparql_integrate.processors.sparql_integrate;
 
 import org.apache.nifi.components.PropertyDescriptor;
-import org.apache.nifi.components.PropertyValue;
 import org.apache.nifi.flowfile.FlowFile;
 import org.aksw.jena_sparql_api.sparql.ext.http.JenaExtensionHttp;
 import org.aksw.jena_sparql_api.sparql.ext.util.JenaExtensionUtil;
@@ -25,7 +24,6 @@ import org.aksw.jena_sparql_api.stmt.SparqlStmt;
 import org.aksw.jena_sparql_api.stmt.SparqlStmtIterator;
 import org.aksw.jena_sparql_api.stmt.SparqlStmtParserImpl;
 import org.aksw.jena_sparql_api.stmt.SparqlStmtQuery;
-import org.apache.commons.compress.utils.IOUtils;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
@@ -69,7 +67,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.StringBufferInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -92,12 +89,19 @@ import com.google.common.io.CharStreams;
 @InputRequirement(Requirement.INPUT_REQUIRED)
 public class SparqlIntegrateProcessor extends AbstractProcessor {
 
-    public static final PropertyDescriptor SPARQL_QUERY = new PropertyDescriptor.Builder().name("SPARQL_QUERY")
-            .displayName("sparql query").description("The query to run.").required(true)
-            .addValidator(StandardValidators.NON_BLANK_VALIDATOR).build();
+    // public static final PropertyDescriptor SPARQL_QUERY = new PropertyDescriptor.Builder()
+    //         .name("SPARQL_QUERY")
+    //         .displayName("SPARQL Query")
+    //         .description("The SPARQL query to run.")
+    //         .required(true)
+    //         .expressionLanguageSupported(true)
+    //         .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+    //         .build();
 
-    public static final Relationship SUCCESS = new Relationship.Builder().name("SUCCESS")
-            .description("Success relationship").build();
+    public static final Relationship SUCCESS = new Relationship.Builder()
+            .name("SUCCESS")
+            .description("Success relationship")
+            .build();
 
     private List<PropertyDescriptor> descriptors;
 
@@ -106,13 +110,12 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
     @Override
     protected void init(final ProcessorInitializationContext context) {
         final List<PropertyDescriptor> descriptors = new ArrayList<PropertyDescriptor>();
-        descriptors.add(SPARQL_QUERY);
+        // descriptors.add(SPARQL_QUERY);
         this.descriptors = Collections.unmodifiableList(descriptors);
 
         final Set<Relationship> relationships = new HashSet<Relationship>();
         relationships.add(SUCCESS);
         this.relationships = Collections.unmodifiableSet(relationships);
-
     }
 
     @Override
@@ -127,7 +130,6 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
 
     @OnScheduled
     public void onScheduled(final ProcessContext context) {
-
     }
 
     @Override

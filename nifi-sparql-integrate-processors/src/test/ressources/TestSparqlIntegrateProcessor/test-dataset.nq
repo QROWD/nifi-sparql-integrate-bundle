@@ -1,0 +1,6 @@
+<http://test-ressource/0> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.example.org/entry> .
+<http://test-ressource/0> <http://www.example.org/0> "0" .
+<http://test-ressource/0> <http://www.example.org/1> "1" .
+<http://test-ressource/0> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.example.org/entry> .
+<http://test-ressource/0> <http://www.example.org/0> "0" .
+<http://test-ressource/0> <http://www.example.org/1> "1" .

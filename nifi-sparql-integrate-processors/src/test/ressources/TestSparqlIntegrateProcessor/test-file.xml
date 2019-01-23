@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<entries>
+    <entry>
+        <zero>00</zero>
+        <one>10</one>
+    </entry>
+    <entry>
+        <zero>01</zero>
+        <one>11</one>
+    </entry>
+</entries>

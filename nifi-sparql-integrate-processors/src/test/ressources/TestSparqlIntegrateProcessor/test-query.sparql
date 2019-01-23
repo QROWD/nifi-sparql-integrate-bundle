@@ -1,0 +1,22 @@
+CONSTRUCT {
+  ?e
+    a eg:entry ;
+    eg:0 ?a ;
+    eg:1 ?b ;
+    .
+}
+WHERE {
+  <test-file.xml> url:text ?src .
+  BIND(STRDT(?src, xsd:xml) AS ?xml)
+  ?xml xml:unnest ("//entry" ?entry)
+
+
+  # Create subject URI
+  BIND("http://test-ressource/" AS ?ns)
+  BIND(xml:path(?entry, "0") AS ?a)
+  BIND(URI(CONCAT(?ns, ?a)) AS ?e)
+
+  # Attributes
+  BIND(xml:path(?entry, "1") AS ?b)
+}
+
