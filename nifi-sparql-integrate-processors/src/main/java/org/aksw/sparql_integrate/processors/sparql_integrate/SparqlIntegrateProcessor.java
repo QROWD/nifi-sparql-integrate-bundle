@@ -16,6 +16,7 @@ package org.aksw.sparql_integrate.processors.sparql_integrate;
 
 import com.google.common.collect.Streams;
 import com.google.common.io.CharStreams;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -48,8 +49,6 @@ import org.apache.jena.query.ReadWrite;
 import org.apache.jena.query.ResultSet;
 import org.apache.jena.query.ResultSetFormatter;
 import org.apache.jena.query.Syntax;
-import org.apache.jena.rdf.model.Model;
-import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdfconnection.RDFConnection;
 import org.apache.jena.rdfconnection.RDFConnectionFactory;
 import org.apache.jena.riot.Lang;
@@ -60,13 +59,7 @@ import org.apache.jena.shared.PrefixMapping;
 import org.apache.jena.shared.impl.PrefixMappingImpl;
 import org.apache.jena.sparql.core.Prologue;
 import org.apache.jena.sparql.core.Quad;
-import org.apache.jena.sparql.lang.arq.ParseException;
-import org.apache.jena.update.UpdateExecutionFactory;
-import org.apache.jena.update.UpdateFactory;
-import org.apache.jena.update.UpdateProcessor;
 import org.apache.jena.update.UpdateRequest;
-import org.apache.nifi.annotation.behavior.InputRequirement;
-import org.apache.nifi.annotation.behavior.InputRequirement.Requirement;
 import org.apache.nifi.annotation.behavior.ReadsAttribute;
 import org.apache.nifi.annotation.behavior.ReadsAttributes;
 import org.apache.nifi.annotation.behavior.WritesAttribute;
@@ -91,9 +84,8 @@ import org.apache.nifi.processor.util.StandardValidators;
 @Tags({"RDF", "SPARQL"})
 @CapabilityDescription("This processor takes an SPARQL query as an argument and outputs a RDF-Turtle file.")
 @SeeAlso({})
-@ReadsAttributes({@ReadsAttribute(attribute = "mime.type", description = "Idnetify what kind of Input is in FlowFile")})
+@ReadsAttributes({@ReadsAttribute(attribute = "mime.type", description = "Identify what kind of Input is in FlowFile")})
 @WritesAttributes({@WritesAttribute(attribute = "", description = "")})
-// @InputRequirement(Requirement.INPUT_REQUIRED)
 public class SparqlIntegrateProcessor extends AbstractProcessor {
 
     public interface FLOW_FILE_CONTENTS {
@@ -173,36 +165,30 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
 
         final String contentFlowFile = context.getProperty(CONTENT_FLOW_FILE).getValue();
         final String baseUri = context.getProperty(BASE_URI).getValue();
-        final AtomicReference<String> sparqlQuery =
-                new AtomicReference<String>(context.getProperty(SPARQL_QUERY_PROPERTY).getValue());
         final AtomicReference<Stream<SparqlStmt>> stmts = new AtomicReference<>();
 
         FlowFile flowFile = session.get();
-        if (flowFile == null) {
-            return;
+
+        String sparqlQuery = new String();
+        if (contentFlowFile.equals(FLOW_FILE_CONTENTS.SPARQL_QUERY)) {
+            final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            session.exportTo(flowFile, bytes);
+            sparqlQuery = bytes.toString();
+        } else {
+            sparqlQuery = context.getProperty(SPARQL_QUERY_PROPERTY).getValue();
+        }
+        SparqlStmtIterator stmtIter = new SparqlStmtIterator(getStmtParser(baseUri), sparqlQuery);
+        stmts.set(Streams.stream(stmtIter));
+        try {
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            getLogger().error("Failed to read sparql query.");
         }
 
-        PrefixMapping pm = new PrefixMappingImpl();
-        pm.setNsPrefixes(PrefixMapping.Extended);
-        JenaExtensionUtil.addPrefixes(pm);
-        JenaExtensionHttp.addPrefixes(pm);
         Dataset dataset = DatasetFactory.create();
         RDFConnection conn = RDFConnectionFactory.connect(dataset);
-        Prologue prologue = new Prologue();
-        prologue.setPrefixMapping(pm);
-        prologue.setBaseURI(baseUri);
-        Function<String, SparqlStmt> sparqlStmtParser = SparqlStmtParserImpl.create(Syntax.syntaxARQ, prologue, true);
-
-        final Path path = Paths.get(baseUri, flowFile.getAttribute("filename"));
+        Path path = null;
         switch (contentFlowFile) {
-            case FLOW_FILE_CONTENTS.SPARQL_QUERY:
-                session.read(flowFile, new InputStreamCallback() {
-                    @Override
-                    public void process(InputStream in) throws IOException {
-                        sparqlQuery.set(CharStreams.toString(new InputStreamReader(in, StandardCharsets.UTF_8)));
-                    }
-                });
-                break;
             case FLOW_FILE_CONTENTS.RDF_DATA:
                 session.read(flowFile, new InputStreamCallback() {
                     @Override
@@ -212,16 +198,11 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
                 });
                 break;
             case FLOW_FILE_CONTENTS.NON_RDF_DATA:
+                path = Paths.get(baseUri, flowFile.getAttribute("filename"));
                 session.exportTo(flowFile, path, false);
                 break;
         }
 
-        try {
-            stmts.set(parseSparqlQuery(sparqlQuery.get(), sparqlStmtParser));
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            getLogger().error("Failed to read sparql query.");
-        }
 
         flowFile = session.write(flowFile, new OutputStreamCallback() {
             @Override
@@ -229,7 +210,7 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
                 stmts.get().forEach(stmt -> processStmts(conn, stmt, out));
             }
         });
-        if (contentFlowFile.equals(FLOW_FILE_CONTENTS.NON_RDF_DATA)) {
+        if (path != null) {
             try {
                 System.out.println("! Deleting File From The Configured Path !");
                 Files.delete(path);
@@ -240,26 +221,25 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
         session.transfer(flowFile, SUCCESS);
     }
 
-    public static Stream<SparqlStmt> parseSparqlQuery(String str, Function<String, SparqlStmt> parser)
-            throws IOException, ParseException {
-        Stream<SparqlStmt> result = Streams.stream(new SparqlStmtIterator(parser, str));
-        return result;
+    private static Function<String, SparqlStmt> getStmtParser(String baseUri) {
+        PrefixMapping pm = new PrefixMappingImpl();
+        pm.setNsPrefixes(PrefixMapping.Extended);
+        JenaExtensionUtil.addPrefixes(pm);
+        JenaExtensionHttp.addPrefixes(pm);
+        Prologue prologue = new Prologue();
+        prologue.setPrefixMapping(pm);
+        prologue.setBaseURI(baseUri);
+        return SparqlStmtParserImpl.create(Syntax.syntaxARQ, prologue, true);
     }
 
     public static void processStmts(RDFConnection conn, SparqlStmt stmt, OutputStream out) {
-        // logger.info("Processing SPARQL Statement: " + stmt);
-
         if (stmt.isQuery()) {
             SparqlStmtQuery qs = stmt.getAsQueryStmt();
             Query q = qs.getQuery();
             q.isConstructType();
             conn.begin(ReadWrite.READ);
-            // SELECT -> STDERR, CONSTRUCT -> STDOUT
             QueryExecution qe = conn.query(q);
-
             if (q.isConstructQuad()) {
-                // ResultSetFormatter.ntrqe.execConstructTriples();
-                // throw new RuntimeException("not supported yet");
                 SinkQuadOutput sink = new SinkQuadOutput(out, null, null);
                 Iterator<Quad> it = qe.execConstructQuads();
                 while (it.hasNext()) {
@@ -270,8 +250,6 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
                 sink.close();
 
             } else if (q.isConstructType()) {
-                // System.out.println(Algebra.compile(q));
-
                 SinkTripleOutput sink = new SinkTripleOutput(out, null, null);
                 Iterator<Triple> it = qe.execConstructTriples();
                 while (it.hasNext()) {
@@ -287,11 +265,9 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
             } else {
                 throw new RuntimeException("Unsupported query type");
             }
-
             conn.end();
         } else if (stmt.isUpdateRequest()) {
             UpdateRequest u = stmt.getAsUpdateStmt().getUpdateRequest();
-
             conn.update(u);
         }
     }
