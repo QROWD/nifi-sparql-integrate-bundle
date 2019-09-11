@@ -19,15 +19,15 @@
     <parent>
         <groupId>org.aksw.sparql-integrate</groupId>
         <artifactId>nifi-sparql-integrate-bundle</artifactId>
-        <version>1.0-SNAPSHOT</version>
+        <version>1.0</version>
     </parent>
 
     <artifactId>nifi-sparql-integrate-processors</artifactId>
     <packaging>jar</packaging>
 
    <properties>
-        <jena.version>3.10.0</jena.version>
-        <jena-sparql-api.subversion>1-SNAPSHOT</jena-sparql-api.subversion>
+        <jena.version>3.11.0</jena.version>
+        <jena-sparql-api.subversion>1</jena-sparql-api.subversion>
         <jena-sparql-api.version>${jena.version}-${jena-sparql-api.subversion}</jena-sparql-api.version>
         <spring-boot.version>1.5.8.RELEASE</spring-boot.version>
         <!-- Project Settings -->
