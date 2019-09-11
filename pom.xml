@@ -31,6 +31,9 @@
         <module>nifi-sparql-integrate-processors</module>
         <module>nifi-sparql-integrate-nar</module>
     </modules>
+    <properties>
+        <allowSnapshots>true</allowSnapshots>
+    </properties>
 
     <dependencyManagement>
         <dependencies>
