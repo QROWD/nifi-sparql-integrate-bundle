@@ -15,13 +15,10 @@
 package org.aksw.sparql_integrate.processors.sparql_integrate;
 
 import com.google.common.collect.Streams;
-import com.google.common.io.CharStreams;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -238,6 +235,7 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
     }
 
     private static Function<String, SparqlStmt> getStmtParser(String baseUri) {
+
         PrefixMapping pm = new PrefixMappingImpl();
         pm.setNsPrefixes(PrefixMapping.Extended);
         JenaExtensionUtil.addPrefixes(pm);
@@ -249,6 +247,7 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
     }
 
     public static void processStmts(RDFConnection conn, SparqlStmt stmt, OutputStream out) {
+
         if (stmt.isQuery()) {
             SparqlStmtQuery qs = stmt.getAsQueryStmt();
             Query q = qs.getQuery();
@@ -264,7 +263,6 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
                 }
                 sink.flush();
                 sink.close();
-
             } else if (q.isConstructType()) {
                 SinkTripleOutput sink = new SinkTripleOutput(out, null, null);
                 Iterator<Triple> it = qe.execConstructTriples();
