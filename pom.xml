@@ -24,7 +24,7 @@
 
     <groupId>org.aksw.sparql-integrate</groupId>
     <artifactId>nifi-sparql-integrate-bundle</artifactId>
-    <version>1.0</version>
+    <version>1.1-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <modules>
