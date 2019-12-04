@@ -209,7 +209,6 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
                 break;
             case FLOW_FILE_CONTENTS.NON_RDF_DATA:
                 path = new File("/tmp/" + flowFile.getAttribute("filename")).toPath();
-                logger.error("Path: " + path.toString());
                 baseUri = path.toAbsolutePath().getParent().toString() + "/";
                 session.exportTo(flowFile, path, false);
                 break;
@@ -223,12 +222,8 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
             sparqlQuery = context.getProperty(SPARQL_QUERY_PROPERTY).evaluateAttributeExpressions(flowFile).getValue();
         }
 
-        logger.error("SparqlQuery: " + sparqlQuery);
-        logger.error("context.getProperty(SPARQL_QUERY_PROPERTY): " + context.getProperty(SPARQL_QUERY_PROPERTY));
-        logger
-                .error("context.getProperty(SPARQL_QUERY_PROPERTY).evaluateAttributeExpressions(): "
-                        + context.getProperty(SPARQL_QUERY_PROPERTY).evaluateAttributeExpressions());
-        logger.error("BaseUri: " + baseUri.toString());
+        logger.info("SparqlQuery: " + sparqlQuery);
+        logger.info("BaseUri: " + baseUri.toString());
 
 
         SparqlStmtIterator stmtIter;
