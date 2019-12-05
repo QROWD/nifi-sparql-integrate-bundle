@@ -15,20 +15,18 @@
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
     <parent>
         <groupId>org.aksw.sparql-integrate</groupId>
         <artifactId>nifi-sparql-integrate-bundle</artifactId>
         <version>1.0</version>
     </parent>
-
     <artifactId>nifi-sparql-integrate-processors</artifactId>
     <packaging>jar</packaging>
-
-   <properties>
-        <jena.version>3.12.0</jena.version>
-        <jena-sparql-api.subversion>1</jena-sparql-api.subversion>
+    <properties>
+        <jena.version>3.13.1</jena.version>
+        <jena-sparql-api.subversion>1-SNAPSHOT</jena-sparql-api.subversion>
         <jena-sparql-api.version>${jena.version}-${jena-sparql-api.subversion}</jena-sparql-api.version>
+        <sparql-integrate.version>1.0.1-SNAPSHOT</sparql-integrate.version>
         <spring-boot.version>1.5.8.RELEASE</spring-boot.version>
         <!-- Project Settings -->
         <maven.compiler.source>1.8</maven.compiler.source>
@@ -39,7 +37,6 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <gpg.keyname>AKSW</gpg.keyname>
     </properties>
-
     <dependencies>
         <dependency>
             <groupId>org.aksw.jena-sparql-api</groupId>
@@ -55,6 +52,16 @@
             <groupId>org.aksw.jena-sparql-api</groupId>
             <artifactId>jena-sparql-api-server-standalone</artifactId>
             <version>${jena-sparql-api.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.locationtech.jts.io</groupId>
+            <artifactId>jts-io-common</artifactId>
+            <version>1.16.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.aksw.sparql-integrate</groupId>
+            <artifactId>sparql-integrate-cli</artifactId>
+            <version>${sparql-integrate.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
@@ -83,4 +90,16 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+    <repositories>
+        <repository>
+            <id>maven.aksw.internal</id>
+            <name>University Leipzig, AKSW Maven2 Internal Repository</name>
+            <url>http://maven.aksw.org/repository/internal/</url>
+        </repository>
+        <repository>
+            <id>maven.aksw.snapshots</id>
+            <name>University Leipzig, AKSW Maven2 Snapshot Repository</name>
+            <url>http://maven.aksw.org/repository/snapshots/</url>
+        </repository>
+    </repositories>
 </project>

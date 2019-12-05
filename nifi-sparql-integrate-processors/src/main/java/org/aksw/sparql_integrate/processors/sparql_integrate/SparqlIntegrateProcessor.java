@@ -31,8 +31,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import com.google.common.collect.Streams;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import org.aksw.jena_sparql_api.sparql.ext.http.JenaExtensionHttp;
+import java.io.PrintStream;
 import org.aksw.jena_sparql_api.sparql.ext.util.JenaExtensionUtil;
+import org.aksw.jena_sparql_api.stmt.SPARQLResultSink;
+import org.aksw.jena_sparql_api.stmt.SPARQLResultSinkQuads;
 import org.aksw.jena_sparql_api.stmt.SparqlStmt;
 import org.aksw.jena_sparql_api.stmt.SparqlStmtIterator;
 import org.aksw.jena_sparql_api.stmt.SparqlStmtParser;
@@ -41,6 +46,7 @@ import org.aksw.jena_sparql_api.stmt.SparqlStmtQuery;
 import org.aksw.jena_sparql_api.stmt.SparqlStmtUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.jena.atlas.lib.Sink;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.DatasetFactory;
@@ -54,6 +60,7 @@ import org.apache.jena.rdfconnection.RDFConnection;
 import org.apache.jena.rdfconnection.RDFConnectionFactory;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
+import org.apache.jena.riot.RDFFormat;
 import org.apache.jena.riot.RDFLanguages;
 import org.apache.jena.riot.out.SinkQuadOutput;
 import org.apache.jena.riot.out.SinkTripleOutput;
@@ -86,6 +93,8 @@ import org.apache.nifi.processor.io.InputStreamCallback;
 import org.apache.nifi.processor.io.OutputStreamCallback;
 import org.apache.nifi.processor.util.StandardValidators;
 import io.github.galbiston.geosparql_jena.configuration.GeoSPARQLConfig;
+import org.aksw.sparql_integrate.cli.SPARQLResultVisitorSelectJsonOutput;
+import org.aksw.sparql_integrate.cli.SparqlStmtProcessor;
 
 @Tags({"RDF", "SPARQL"})
 @CapabilityDescription("This processor takes an SPARQL query as an argument and outputs a RDF-Turtle file.")
@@ -114,7 +123,7 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
             .name("BASE_URI")
             .displayName("Base URI")
             .description("Base URI for the SPARQL queries.")
-            .expressionLanguageSupported(true)
+            .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
             .build();
 
@@ -145,6 +154,16 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
             .defaultValue(RDF_DATA.getValue())
             .build();
 
+    public static final PropertyDescriptor FORMAT_OUTPUT = new PropertyDescriptor.Builder()
+            .name("FORMAT_OUTPUT")
+            .displayName("Format of outout FlowFile")
+            .description("Format of outout FlowFile")
+            .required(true)
+            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+            .allowableValues(NT, JSONLD)
+            .defaultValue(NT.getValue())
+            .build();
+
     public static final Relationship SUCCESS =
             new Relationship.Builder().name("SUCCESS").description("Success relationship").build();
 
@@ -159,6 +178,7 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
         descriptors.add(CONTENT_FLOW_FILE);
         descriptors.add(RDF_DATA_INPUT_SYNTAX);
         descriptors.add(SPARQL_QUERY_PROPERTY);
+        descriptors.add(FORMAT_OUTPUT);
         this.descriptors = Collections.unmodifiableList(descriptors);
 
         final Set<Relationship> relationships = new HashSet<Relationship>();
@@ -185,21 +205,25 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
 
         final ComponentLog logger = getLogger();
         final String contentFlowFile = context.getProperty(CONTENT_FLOW_FILE).getValue();
+        final String formatOutput = context.getProperty(FORMAT_OUTPUT).getValue();
         final String rdfDataInputSyntax = context.getProperty(RDF_DATA_INPUT_SYNTAX).getValue();
         final AtomicReference<Stream<SparqlStmt>> stmts = new AtomicReference<>();
         // Disable creation of a derby.log file ; triggered by the GeoSPARQL module
-        System.setProperty("derby.stream.error.field",
-                "org.aksw.sparql_integrate.cli.DerbyUtil.DEV_NULL");
-
+        System.setProperty("derby.stream.error.field", "org.aksw.sparql_integrate.cli.DerbyUtil.DEV_NULL");
         // Init geosparql module
         GeoSPARQLConfig.setupNoIndex();
+
         FlowFile flowFile = session.get();
-        String baseUri = context.getProperty(BASE_URI).evaluateAttributeExpressions().getValue();
-        Dataset dataset = DatasetFactory.create();
-        RDFConnection conn = RDFConnectionFactory.connect(dataset);
+        String baseUri = context.getProperty(BASE_URI).isSet()
+                ? context.getProperty(BASE_URI).evaluateAttributeExpressions().getValue()
+                : "";
         Path path = null;
+        Dataset dataset = DatasetFactory.create();
+        String sparqlQuery = null;
         switch (contentFlowFile) {
             case FLOW_FILE_CONTENTS.RDF_DATA:
+                sparqlQuery =
+                        context.getProperty(SPARQL_QUERY_PROPERTY).evaluateAttributeExpressions(flowFile).getValue();
                 session.read(flowFile, new InputStreamCallback() {
                     @Override
                     public void process(InputStream in) throws IOException {
@@ -208,35 +232,63 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
                 });
                 break;
             case FLOW_FILE_CONTENTS.NON_RDF_DATA:
+                sparqlQuery =
+                        context.getProperty(SPARQL_QUERY_PROPERTY).evaluateAttributeExpressions(flowFile).getValue();
                 path = new File("/tmp/" + flowFile.getAttribute("filename")).toPath();
                 baseUri = path.toAbsolutePath().getParent().toString() + "/";
                 session.exportTo(flowFile, path, false);
                 break;
-        }
-        String sparqlQuery = new String();
-        if (contentFlowFile.equals(FLOW_FILE_CONTENTS.SPARQL_QUERY)) {
-            final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            session.exportTo(flowFile, bytes);
-            sparqlQuery = bytes.toString();
-        } else {
-            sparqlQuery = context.getProperty(SPARQL_QUERY_PROPERTY).evaluateAttributeExpressions(flowFile).getValue();
+            case FLOW_FILE_CONTENTS.SPARQL_QUERY:
+                final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                session.exportTo(flowFile, bytes);
+                sparqlQuery = bytes.toString();
+                break;
         }
 
         logger.info("SparqlQuery: " + sparqlQuery);
         logger.info("BaseUri: " + baseUri.toString());
 
+        RDFConnection conn = RDFConnectionFactory.connect(dataset);
+        PrefixMapping pm = new PrefixMappingImpl();
+        pm.setNsPrefixes(PrefixMapping.Extended);
+        JenaExtensionUtil.addPrefixes(pm);
+        JenaExtensionHttp.addPrefixes(pm);
+        Prologue prologue = new Prologue();
+        prologue.setPrefixMapping(pm);
+        prologue.setBaseURI(baseUri);
+        Function<String, SparqlStmt> rawSparqlStmtParser =
+                SparqlStmtParserImpl.create(Syntax.syntaxARQ, prologue, true);
+        SparqlStmtParser sparqlStmtParser = SparqlStmtParser.wrapWithNamespaceTracking(pm, rawSparqlStmtParser);
 
         SparqlStmtIterator stmtIter;
         try {
-            stmtIter = getStmtIter(baseUri, sparqlQuery);
+            stmtIter = SparqlStmtUtils.parse(IOUtils.toInputStream(sparqlQuery, "UTF-8"), sparqlStmtParser);
             stmts.set(Streams.stream(stmtIter));
         } catch (Exception e) {
             e.printStackTrace();
         }
+        SparqlStmtProcessor processor = new SparqlStmtProcessor();
+        processor.setShowQuery(true);
+        // SPARQLResultSink sink;
         flowFile = session.write(flowFile, new OutputStreamCallback() {
             @Override
             public void process(OutputStream out) throws IOException {
-                stmts.get().forEach(stmt -> processStmts(conn, stmt, out));
+                SPARQLResultSink sink;
+                if (formatOutput.equals(NT.getValue())) {
+                    Sink<Quad> quadSink = SparqlStmtUtils.createSink(RDFFormat.NT, out, pm);
+                    sink = new SPARQLResultSinkQuads(quadSink);
+                } else {
+                    Gson gson = new GsonBuilder().setPrettyPrinting().create();
+                    PrintStream printOut = new PrintStream(out);
+                    sink = new SPARQLResultVisitorSelectJsonOutput(null, 4, true, gson, printOut, printOut);
+                }
+                stmts.get().forEach(stmt -> processor.processSparqlStmt(conn, stmt, sink));
+                sink.flush();
+                try {
+                    sink.close();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         });
         if (path != null) {
@@ -250,62 +302,5 @@ public class SparqlIntegrateProcessor extends AbstractProcessor {
         String filename = FilenameUtils.getBaseName(flowFile.getAttribute("filename")) + ".nt";
         session.putAttribute(flowFile, "filename", filename);
         session.transfer(flowFile, SUCCESS);
-    }
-
-    private static SparqlStmtIterator getStmtIter(String baseUri, String sparqlQuery)
-            throws IOException, ParseException {
-
-        PrefixMapping pm = new PrefixMappingImpl();
-        pm.setNsPrefixes(PrefixMapping.Extended);
-        JenaExtensionUtil.addPrefixes(pm);
-        JenaExtensionHttp.addPrefixes(pm);
-        Prologue prologue = new Prologue();
-        prologue.setPrefixMapping(pm);
-        prologue.setBaseURI(baseUri);
-        Function<String, SparqlStmt> rawSparqlStmtParser =
-                SparqlStmtParserImpl.create(Syntax.syntaxARQ, prologue, true);
-        SparqlStmtParser sparqlStmtParser = SparqlStmtParser.wrapWithNamespaceTracking(pm, rawSparqlStmtParser);
-        SparqlStmtIterator stmts = SparqlStmtUtils.parse(IOUtils.toInputStream(sparqlQuery, "UTF-8"), sparqlStmtParser);
-        return stmts;
-    }
-
-    public static void processStmts(RDFConnection conn, SparqlStmt stmt, OutputStream out) {
-
-        if (stmt.isQuery()) {
-            SparqlStmtQuery qs = stmt.getAsQueryStmt();
-            Query q = qs.getQuery();
-            q.isConstructType();
-            conn.begin(ReadWrite.READ);
-            QueryExecution qe = conn.query(q);
-            if (q.isConstructQuad()) {
-                SinkQuadOutput sink = new SinkQuadOutput(out, null, null);
-                Iterator<Quad> it = qe.execConstructQuads();
-                while (it.hasNext()) {
-                    Quad t = it.next();
-                    sink.send(t);
-                }
-                sink.flush();
-                sink.close();
-            } else if (q.isConstructType()) {
-                SinkTripleOutput sink = new SinkTripleOutput(out, null, null);
-                Iterator<Triple> it = qe.execConstructTriples();
-                while (it.hasNext()) {
-                    Triple t = it.next();
-                    sink.send(t);
-                }
-                sink.flush();
-                sink.close();
-            } else if (q.isSelectType()) {
-                ResultSet rs = qe.execSelect();
-                String str = ResultSetFormatter.asText(rs);
-                System.err.println(str);
-            } else {
-                throw new RuntimeException("Unsupported query type");
-            }
-            conn.end();
-        } else if (stmt.isUpdateRequest()) {
-            UpdateRequest u = stmt.getAsUpdateStmt().getUpdateRequest();
-            conn.update(u);
-        }
     }
 }
